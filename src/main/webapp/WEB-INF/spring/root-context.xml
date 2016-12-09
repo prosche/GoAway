@@ -17,66 +17,54 @@
 	<!-- Root Context: defines shared resources visible to all other web components -->
 	<!-- Hibernate4 -->
 	<!-- 加载资源文件 其中包含变量信息，必须在Spring配置文件的最前面加载，即第一个加载 -->
-	<context:property-placeholder location="classpath*:config/jdbc.properties" />
+	<context:property-placeholder location="/WEB-INF/config/jdbc.properties" />
 
-    <!-- 配置数据源Master -->
-    <bean name="dataSourceMaster" class="com.mchange.v2.c3p0.ComboPooledDataSource" init-method="init" destroy-method="close">
-        <property name="url" value="${jdbc_url}" />
-        <property name="username" value="${jdbc_username}" />
-        <property name="password" value="${jdbc_password}" />
-        <!-- 初始化连接大小 -->
-        <property name="initialSize" value="0" />
-        <!-- 连接池最大使用连接数量 -->
-        <property name="maxActive" value="20" />
-        <!-- 连接池最大空闲 -->
-        <property name="maxIdle" value="20" />
-        <!-- 连接池最小空闲 -->
-        <property name="minIdle" value="0" />
-        <!-- 获取连接最大等待时间 -->
-        <property name="maxWait" value="60000" />
-    </bean>    
-    <!-- 配置数据源Slave -->
-    <bean name="dataSourceSlave" class="com.mchange.v2.c3p0.ComboPooledDataSource" init-method="init" destroy-method="close">
-        <property name="url" value="${jdbc_url_slave}" />
-        <property name="username" value="${jdbc_username_slave}" />
-        <property name="password" value="${jdbc_password_slave}" />
-        <!-- 初始化连接大小 -->
-        <property name="initialSize" value="0" />
-        <!-- 连接池最大使用连接数量 -->
-        <property name="maxActive" value="20" />
-        <!-- 连接池最大空闲 -->
-        <property name="maxIdle" value="20" />
-        <!-- 连接池最小空闲 -->
-        <property name="minIdle" value="0" />
-        <!-- 获取连接最大等待时间 -->
-        <property name="maxWait" value="60000" />
-    </bean>
-    
-    <bean id="dataSource" class="org.java.com.common.util.ThreadLocalRountingDataSource">
-        <property name="defaultTargetDataSource" ref="dataSourceMaster" />
-        <property name="targetDataSources">
-            <map key-type="net.aazj.enums.DataSources">
-                <entry key="MASTER" value-ref="dataSourceMaster"/>
-                <entry key="SLAVE" value-ref="dataSourceSlave"/>
-                <!-- 这里还可以加多个dataSource -->
-            </map>
-        </property>
-    </bean>    
-    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
-      <property name="dataSource" ref="dataSource" />
-      <property name="configLocation" value="classpath:config/mybatis-config.xml" />
-      <property name="mapperLocations" value="classpath*:config/mappers/**/*.xml" />
-    </bean>    
-    <!-- Transaction manager for a single JDBC DataSource -->
-    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
-        <property name="dataSource" ref="dataSource" />
-    </bean>    
-    <!-- 使用annotation定义事务 -->
-    <tx:annotation-driven transaction-manager="transactionManager" /> 
-    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
-      <property name="basePackage" value="net.aazj.mapper" />
-      <!-- <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/> -->
-    </bean>
+	<!-- 配置数据源Master -->
+	<bean name="dataSourceMaster" class="com.mchange.v2.c3p0.ComboPooledDataSource"
+		destroy-method="close">
+		<property name="driverClass" value="${jdbc_driver}" />
+		<property name="jdbcUrl" value="${jdbc_url}" />
+		<property name="user" value="${jdbc_username}" />
+		<property name="password" value="${jdbc_password}" />
+		<!-- 初始化连接大小 -->
+		<property name="initialPoolSize" value="0" />
+		<!-- 连接池最大使用连接数量 -->
+		<property name="maxIdleTime" value="20" />
+		<!-- 连接池最大空闲 -->
+		<property name="maxPoolSize" value="20" />
+		<!-- 连接池最小空闲 -->
+		<property name="minPoolSize" value="0" />
+		<!-- 获取连接最大等待时间 -->
+		<property name="checkoutTimeout" value="60000" />
+	</bean>
+	<!-- 配置数据源Slave -->
+	<bean name="dataSourceSlave" class="com.mchange.v2.c3p0.ComboPooledDataSource"
+		destroy-method="close">
+		<property name="driverClass" value="${jdbc_driver_slave}" />
+		<property name="jdbcUrl" value="${jdbc_url_slave}" />
+		<property name="user" value="${jdbc_username_slave}" />
+		<property name="password" value="${jdbc_password_slave}" />
+		<!-- 初始化连接大小 -->
+		<property name="initialPoolSize" value="0" />
+		<!-- 连接池最大使用连接数量 -->
+		<property name="maxIdleTime" value="20" />
+		<!-- 连接池最大空闲 -->
+		<property name="maxPoolSize" value="20" />
+		<!-- 连接池最小空闲 -->
+		<property name="minPoolSize" value="0" />
+		<!-- 获取连接最大等待时间 -->
+		<property name="checkoutTimeout" value="60000" />
+	</bean>
+
+	<bean id="dataSource" class="org.java.com.common.util.ThreadLocalRountingDataSource">
+		<property name="targetDataSources">
+			<map key-type="java.lang.String">
+				<entry key="master" value-ref="dataSourceMaster" />
+				<entry key="slave" value-ref="dataSourceSlave" />
+			</map>
+		</property>
+		<property name="defaultTargetDataSource" ref="dataSourceMaster" />
+	</bean>
 
 	<!-- 配置SessionFactory -->
 	<bean id="sessionFactory"
@@ -96,17 +84,45 @@
 		</property>
 	</bean>
 
-	<!-- 配置Hibernate事务管理器 -->
-	<!-- Transaction manager for a single Hibernate SessionFactory (alternative 
-		to JTA) -->
+	<!-- 启动对@AspectJ注解的支持 -->
+	<!-- proxy-target-class等于true是强制使用cglib代理，proxy-target-class默认是false，如果你的类实现了接口 
+		就走JDK代理，如果没有走cglib代理 -->
+	<!-- 注：对于单利模式建议使用cglib代理，虽然JDK动态代理比cglib代理速度快，但性能不如cglib -->
+	<aop:aspectj-autoproxy proxy-target-class="true" />
+	<!-- <context:annotation-config /> -->
+
+	<!-- 切换数据源 -->
+	<!-- <bean id="dataSourceAdvice" class="org.java.com.aop.DataSourceContextAop" 
+		/> -->
+	<bean id="manyDataSourceAspect" class="org.java.com.aop.DataSourceAspect" />
+	<aop:config>
+		<aop:aspect id="c" ref="manyDataSourceAspect">
+			<aop:pointcut id="tx"
+				expression="execution(* org.java.com.service..*.*(..))" />
+			<aop:before pointcut-ref="tx" method="before" />
+		</aop:aspect>
+	</aop:config>
+	
+	<!-- 配置事务管理器 -->
 	<bean id="transactionManager"
 		class="org.springframework.orm.hibernate4.HibernateTransactionManager">
-		<property name="sessionFactory" ref="sessionFactory" />
+		<property name="sessionFactory">
+			<ref bean="sessionFactory" />
+		</property>
 	</bean>
-	
-	<!-- 配置事务异常封装 -->
-<!--    <bean id="persistenceExceptionTranslationPostProcessor" 
-       class="org.springframework.dao.annotation.PersistenceExceptionTranslationPostProcessor" /> -->
+	<!--配置事务的传播特性 -->
+	<!-- <tx:advice id="txAdvice" transaction-manager="transactionManager"> 
+		<tx:attributes> 对增、删、改方法进行事务支持 <tx:method name="add*" propagation="REQUIRED" 
+		/> <tx:method name="create*" propagation="REQUIRED" /> <tx:method name="save*" 
+		propagation="REQUIRED" /> <tx:method name="edit*" propagation="REQUIRED" 
+		/> <tx:method name="update*" propagation="REQUIRED" /> <tx:method name="delete*" 
+		propagation="REQUIRED" /> <tx:method name="remove*" propagation="REQUIRED" 
+		/> 对查找方法进行只读事务 <tx:method name="loadByUsername*" propagation="SUPPORTS" read-only="true" 
+		/> 对其它方法进行只读事务 <tx:method name="*" propagation="SUPPORTS" read-only="true" 
+		/> </tx:attributes> </tx:advice> 那些类的哪些方法参与事务 <aop:config> <aop:advisor pointcut="execution(* 
+		org.java.com.service.*Service.*(..))" advice-ref="txAdvice" /> <aop:advisor 
+		pointcut="execution(* org.java.com.service.impl.*ServiceImpl.*(..))" advice-ref="txAdvice" 
+		/> </aop:config> -->
 
 	<!-- 配置事务管理器，使用拦截器声明式事务 -->
 	<bean id="transactionInterceptor"

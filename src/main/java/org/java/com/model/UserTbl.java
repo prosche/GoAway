@@ -1,7 +1,6 @@
 package org.java.com.model;
 
 import java.io.Serializable;
-import java.security.Timestamp;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
