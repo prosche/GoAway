@@ -18,9 +18,6 @@ public class OfferServiceImpl implements OfferService {
 	@Autowired
 	private OfferDao offerDao;
 	
-	@Override
-	@Transactional(rollbackFor={Exception.class})  
-    @DataSource(DataSources.SLAVE)  
 	public List<OfferTbl> getOffers(int id){
 		OfferBean list = new OfferBean();
 		list.setOfferId(String.valueOf(id));

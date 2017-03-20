@@ -35,10 +35,7 @@
 		<!-- 连接池最小空闲 -->
 		<property name="minPoolSize" value="0" />
 		<!-- 获取连接最大等待时间 -->
-		<property name="maxStatements" value="60000" />
-		<property name="acquireIncrement" value="1"></property>
-		<property name="idleConnectionTestPeriod" value="6000"></property>
-		<property name="autoCommitOnClose" value="true"></property>
+		<property name="checkoutTimeout" value="60000" />
 	</bean>
 	<!-- 配置数据源Slave -->
 	<bean name="dataSourceSlave" class="com.mchange.v2.c3p0.ComboPooledDataSource"
@@ -77,10 +74,6 @@
 			<props>
 				<prop key="hibernate.dialect">org.hibernate.dialect.MySQLDialect</prop>
 				<prop key="hibernate.show_sql">true</prop>
-				<prop key="hibernate.autoReconnect">true</prop>
-				<prop key="hibernate.hbm2ddl.auto">update</prop>
-				<prop key="hibernate.format_sql">false</prop>
-				<prop key="current_session_context_class">thread</prop>
 			</props>
 		</property>
 		<!-- 自动扫描指定位置下的实体文件进行映射 -->
@@ -91,13 +84,32 @@
 		</property>
 	</bean>
 
-	<!-- 切换数据源 -->
-	<bean id="dataSourceAdvice" class="org.java.com.aop.DataSourceAdvice" />
-	<aop:config>
-		<aop:advisor pointcut="execution(* org.java.com.service..*.*(..))"
-			advice-ref="dataSourceAdvice" />
-	</aop:config>
+	<!-- 启动对@AspectJ注解的支持 -->
+	<!-- proxy-target-class等于true是强制使用cglib代理，proxy-target-class默认是false，如果你的类实现了接口 
+		就走JDK代理，如果没有走cglib代理 -->
+	<!-- 注：对于单利模式建议使用cglib代理，虽然JDK动态代理比cglib代理速度快，但性能不如cglib -->
+	<aop:aspectj-autoproxy proxy-target-class="true" />
+	<!-- <context:annotation-config /> -->
 
+	<!-- 切换数据源 -->
+	<!-- <bean id="dataSourceAdvice" class="org.java.com.aop.DataSourceContextAop" 
+		/> -->
+<!-- 	<bean id="manyDataSourceAspect" class="org.java.com.aop.DataSourceAdvice" />
+	<aop:config>
+		<aop:aspect id="c" ref="manyDataSourceAspect">
+			<aop:pointcut id="tx"
+				expression="execution(* org.java.com.service..*.*(..))" />
+			<aop:before pointcut-ref="tx" method="before" />
+		</aop:aspect>
+	</aop:config> -->
+	
+	<bean id="dataSourceAdvice" class="org.java.com.aop.DataSourceAdvice" />  
+    <aop:config>  
+        <aop:advisor  
+            pointcut="execution(* org.java.com.service..*.*(..))"  
+            advice-ref="dataSourceAdvice" />  
+    </aop:config>
+	
 	<!-- 配置事务管理器 -->
 	<bean id="transactionManager"
 		class="org.springframework.orm.hibernate4.HibernateTransactionManager">
@@ -106,27 +118,50 @@
 		</property>
 	</bean>
 	<!--配置事务的传播特性 -->
-	<tx:advice id="txAdvice" transaction-manager="transactionManager">
-		<tx:attributes>
-			<!-- 对增、删、改方法进行事务支持 -->
-			<tx:method name="add*" propagation="REQUIRED" />
-			<tx:method name="create*" propagation="REQUIRED" />
-			<tx:method name="save*" propagation="REQUIRED" />
-			<tx:method name="edit*" propagation="REQUIRED" />
-			<tx:method name="update*" propagation="REQUIRED" />
-			<tx:method name="delete*" propagation="REQUIRED" />
-			<tx:method name="remove*" propagation="REQUIRED" />
-			<!-- 对查找方法进行只读事务 -->
-			<tx:method name="getOffers*" propagation="SUPPORTS"
-				read-only="true" />
-			<!-- 对其它方法进行只读事务 -->
-			<tx:method name="*" propagation="SUPPORTS" read-only="true" />
-		</tx:attributes>
-	</tx:advice>
-	<!-- 那些类的哪些方法参与事务 -->
-	<aop:config>
-		<aop:advisor pointcut="execution(* org.java.com.service..*.*(..))" advice-ref="txAdvice" />
-		<!-- <aop:advisor pointcut="execution(* org.java.com.service.impl.*ServiceImpl.*(..))" advice-ref="txAdvice" /> -->
-	</aop:config>
-    
+	<!-- <tx:advice id="txAdvice" transaction-manager="transactionManager"> 
+		<tx:attributes> 对增、删、改方法进行事务支持 <tx:method name="add*" propagation="REQUIRED" 
+		/> <tx:method name="create*" propagation="REQUIRED" /> <tx:method name="save*" 
+		propagation="REQUIRED" /> <tx:method name="edit*" propagation="REQUIRED" 
+		/> <tx:method name="update*" propagation="REQUIRED" /> <tx:method name="delete*" 
+		propagation="REQUIRED" /> <tx:method name="remove*" propagation="REQUIRED" 
+		/> 对查找方法进行只读事务 <tx:method name="loadByUsername*" propagation="SUPPORTS" read-only="true" 
+		/> 对其它方法进行只读事务 <tx:method name="*" propagation="SUPPORTS" read-only="true" 
+		/> </tx:attributes> </tx:advice> 那些类的哪些方法参与事务 <aop:config> <aop:advisor pointcut="execution(* 
+		org.java.com.service.*Service.*(..))" advice-ref="txAdvice" /> <aop:advisor 
+		pointcut="execution(* org.java.com.service.impl.*ServiceImpl.*(..))" advice-ref="txAdvice" 
+		/> </aop:config> -->
+
+	<!-- 配置事务管理器，使用拦截器声明式事务 -->
+	<bean id="transactionInterceptor"
+		class="org.springframework.transaction.interceptor.TransactionInterceptor">
+		<property name="transactionManager" ref="transactionManager" />
+		<!-- 配置事务属性 -->
+		<property name="transactionAttributes">
+			<props>
+				<!-- PROPAGATION_REQUIRED：支持当前事务，如果当前没有事务，则新建一个事务 -->
+				<prop key=" save* "> PROPAGATION_REQUIRED </prop>
+				<prop key=" update* "> PROPAGATION_REQUIRED </prop>
+				<prop key=" delete* "> PROPAGATION_REQUIRED </prop>
+				<prop key=" find* "> PROPAGATION_REQUIRED </prop>
+				<prop key=" get* "> PROPAGATION_REQUIRED </prop>
+				<prop key=" execute* "> PROPAGATION_REQUIRED </prop>
+				<prop key=" load* "> PROPAGATION_REQUIRED </prop>
+				<prop key=" merge* "> PROPAGATION_REQUIRED </prop>
+				<prop key=" add* "> PROPAGATION_REQUIRED </prop>
+			</props>
+		</property>
+	</bean>
+	<bean
+		class="org.springframework.aop.framework.autoproxy.BeanNameAutoProxyCreator">
+		<property name="beanNames">
+			<list>
+				<value>*ServiceImpl</value>
+			</list>
+		</property>
+		<property name="interceptorNames">
+			<list>
+				<value>transactionInterceptor</value>
+			</list>
+		</property>
+	</bean>
 </beans>
